@@ -51,13 +51,19 @@ else
 fi
 
 # 3. 同步 skill 源码 → 发布仓库（不带 --delete，保留仓库自有 README/LICENSE/.gitignore/.git）
+#    目标结构：源码与台账在根目录，SKILL.md → skill/，维护脚本 → scripts/，spec 存档 → docs/
 echo "2/4 同步源码 → $PUB_DIR"
 SYNC_FAILED=""
-for f in main.go memos_client.go go.mod quickstart.sh VERSIONS.md update-check.sh release.sh SKILL.md; do
+mkdir -p "$PUB_DIR/skill" "$PUB_DIR/scripts" "$PUB_DIR/docs"
+for f in main.go memos_client.go go.mod VERSIONS.md; do
   cp "$SKILL_DIR/$f" "$PUB_DIR/$f" 2>/dev/null || SYNC_FAILED="$SYNC_FAILED $f"
 done
+cp "$SKILL_DIR/SKILL.md" "$PUB_DIR/skill/SKILL.md" 2>/dev/null || SYNC_FAILED="$SYNC_FAILED SKILL.md"
+for f in quickstart.sh update-check.sh release.sh; do
+  cp "$SKILL_DIR/$f" "$PUB_DIR/scripts/$f" 2>/dev/null || SYNC_FAILED="$SYNC_FAILED $f"
+done
 SPEC=$(ls "$SKILL_DIR"/openapi-v*.yaml 2>/dev/null | tail -1)
-[ -n "$SPEC" ] && cp "$SPEC" "$PUB_DIR/"
+[ -n "$SPEC" ] && cp "$SPEC" "$PUB_DIR/docs/"
 [ -n "$SYNC_FAILED" ] && { echo "❌ 同步失败:$SYNC_FAILED"; exit 1; }
 git -C "$PUB_DIR" status --porcelain | sed 's/^/   /'
 

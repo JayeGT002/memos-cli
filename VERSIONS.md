@@ -7,6 +7,13 @@
 
 ---
 
+## v0.31.0-r3
+
+- **更新时间（本版本）**：2026-09-23
+- **Memos 项目更新时间**：无变化，仍为 v0.31.0（2026-09-20 00:50 (UTC+8) 发布）
+- **API 兼容版本**：Memos v0.31.0（基准 `proto/gen/openapi.yaml`，存档 `docs/openapi-v0.31.0.yaml`，无变化）
+- **介绍**：仓库目录结构重组：SKILL.md 收入 `skill/`、维护脚本收入 `scripts/`、OpenAPI spec 存档收入 `docs/`，README 增加目录结构与 Skill 使用说明；`quickstart.sh`/`update-check.sh` 路径自适应（skill 源目录与仓库 `scripts/` 下均可运行）。无代码变更。
+
 ## v0.31.0-r2
 
 - **更新时间（本版本）**：2026-09-23

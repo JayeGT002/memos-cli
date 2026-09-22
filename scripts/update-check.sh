@@ -5,7 +5,9 @@
 # 退出码: 0=本地已兼容最新  1=上游有更新(新 spec 已下载待适配)  2=检查失败
 set -u
 
-SKILL_DIR=$(cd "$(dirname "$0")" && pwd)
+DIR=$(cd "$(dirname "$0")" && pwd)
+# 路径自适应：skill 源目录（同目录有 go.mod）/ 发布仓库 scripts/ 子目录（源码在上一级）
+if [ -f "$DIR/go.mod" ]; then SKILL_DIR="$DIR"; else SKILL_DIR="$DIR/.."; fi
 WORK_DIR="$SKILL_DIR/../../sandbox/memos-api-check"
 mkdir -p "$WORK_DIR"
 LOG="$WORK_DIR/last-check.log"
@@ -33,8 +35,9 @@ fi
 UP_TAG=${LATEST%%|*}
 UP_TIME=${LATEST##*|}
 
-# 2. 本地兼容版本 = spec 存档文件名
+# 2. 本地兼容版本 = spec 存档文件名（skill 目录平放，或仓库 docs/ 下）
 LOCAL_FILE=$(ls "$SKILL_DIR"/openapi-v*.yaml 2>/dev/null | tail -1)
+[ -z "$LOCAL_FILE" ] && LOCAL_FILE=$(ls "$SKILL_DIR"/docs/openapi-v*.yaml 2>/dev/null | tail -1)
 [ -z "$LOCAL_FILE" ] && fail "未找到本地 spec 存档 openapi-v*.yaml"
 LOCAL_TAG=$(basename "$LOCAL_FILE" | sed 's/^openapi-//; s/\.yaml$//')   # 形如 v0.31.0（含 v 前缀）
 

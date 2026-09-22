@@ -3,7 +3,7 @@
 ## Description
 
 Go-based CLI tool for Memos self-hosted notes system API. Memo CRUD via `/api/v1`.
-**已对齐本地 memos v0.31.0 openapi spec（2026-09-23 全链路验证）**，spec 存档见同目录 `openapi-v0.31.0.yaml`。
+**已对齐本地 memos v0.31.0 openapi spec（2026-09-23 全链路验证）**，spec 存档见同目录 `openapi-v0.31.0.yaml`（发布仓库内位于 `docs/`）。
 
 ## ⚠️ 安全限制
 
@@ -121,7 +121,7 @@ cd skills/memos-api
 ./release.sh vX.Y.Z-rN --yes       # 7. 确认后正式发布：push + GitHub Release
 ```
 
-工具位置：`update-check.sh` / `release.sh` / `VERSIONS.md`（发布仓库 = `projects/memos-cli/`，2026-09-23 由 sandbox 迁入 → github.com/JayeGT002/memos-cli）。
+工具位置：`update-check.sh` / `release.sh` / `VERSIONS.md`（发布仓库 = `projects/memos-cli/`，2026-09-23 由 sandbox 迁入 → github.com/JayeGT002/memos-cli。仓库结构自 v0.31.0-r3 起：源码与台账在根目录、skill 文档在 `skill/`、维护脚本在 `scripts/`、spec 存档在 `docs/`）。
 失败处置：push 前失败无外部副作用，修复重跑（dry-run 的本地 commit/tag 会被复用）；`gh release create` 失败按脚本提示补发。
 
 ## Dependencies
