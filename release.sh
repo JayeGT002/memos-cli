@@ -4,12 +4,12 @@
 #   例: ./release.sh v0.31.0-r1 --dry-run   # 预览，不产生任何外部动作（默认行为）
 #        ./release.sh v0.31.0-r1 --yes        # 真发布：push + gh release
 # 前置: 1) VERSIONS.md 已写好 <version> 条目  2) 冒烟通过（正式发布默认强制跑 quickstart）
-# 发布源目录: sandbox/memos-cli-publish/（git → github.com/JayeGT002/memos-cli）
+# 发布源目录: projects/memos-cli/（2026-09-23 由 sandbox/memos-cli-publish 迁入；git → github.com/JayeGT002/memos-cli）
 # 失败处置: push 前失败 → 本地无副作用，修复重跑；push 后失败 → 用 gh release create 补发，git 历史不回滚
 set -u
 
 SKILL_DIR=$(cd "$(dirname "$0")" && pwd)
-PUB_DIR="$SKILL_DIR/../../sandbox/memos-cli-publish"
+PUB_DIR="$SKILL_DIR/../../projects/memos-cli"
 
 VER="${1:-}"
 case "$VER" in ""|-*) echo "❌ 缺少版本号。用法: ./release.sh vX.Y.Z-rN [--dry-run] [--yes]"; exit 2;; esac
@@ -96,7 +96,7 @@ echo "4/4 推送 GitHub + 创建 Release..."
 git -C "$PUB_DIR" push origin main || { echo "❌ push main 失败 → 修复后重跑（tag 未推，无外部残留）"; exit 1; }
 git -C "$PUB_DIR" push origin "$VER" || { echo "❌ push tag 失败 → 重跑: git -C $PUB_DIR push origin $VER"; exit 1; }
 GH_BIN=$(command -v gh || echo /root/.local/bin/gh)
-printf '%s\n' "$NOTES" | "$GH_BIN" release create "$VER" --title "$VER" --notes-file - \
-  || { echo "❌ gh release create 失败 → 补发: printf '%s' '<notes>' | $GH_BIN release create $VER --title $VER --notes-file -"; exit 1; }
+printf '%s\n' "$NOTES" | "$GH_BIN" release create "$VER" --repo JayeGT002/memos-cli --title "$VER" --notes-file - \
+  || { echo "❌ gh release create 失败 → 补发: printf '%s' '<notes>' | $GH_BIN release create $VER --repo JayeGT002/memos-cli --title $VER --notes-file -"; exit 1; }
 
 echo "✅ 发版完成: $VER（main + tag + GitHub Release）"

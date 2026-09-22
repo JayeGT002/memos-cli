@@ -121,7 +121,7 @@ cd skills/memos-api
 ./release.sh vX.Y.Z-rN --yes       # 7. 确认后正式发布：push + GitHub Release
 ```
 
-工具位置：`update-check.sh` / `release.sh` / `VERSIONS.md`（发布仓库 = `sandbox/memos-cli-publish/` → github.com/JayeGT002/memos-cli）。
+工具位置：`update-check.sh` / `release.sh` / `VERSIONS.md`（发布仓库 = `projects/memos-cli/`，2026-09-23 由 sandbox 迁入 → github.com/JayeGT002/memos-cli）。
 失败处置：push 前失败无外部副作用，修复重跑（dry-run 的本地 commit/tag 会被复用）；`gh release create` 失败按脚本提示补发。
 
 ## Dependencies

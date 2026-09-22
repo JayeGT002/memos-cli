@@ -7,6 +7,13 @@
 
 ---
 
+## v0.31.0-r2
+
+- **更新时间（本版本）**：2026-09-23
+- **Memos 项目更新时间**：无变化，仍为 v0.31.0（2026-09-20 00:50 (UTC+8) 发布）
+- **API 兼容版本**：Memos v0.31.0（基准 `proto/gen/openapi.yaml`，存档 `openapi-v0.31.0.yaml`，无变化）
+- **介绍**：发布仓库由 `sandbox/memos-cli-publish/` 迁至 `projects/memos-cli/`（长期项目目录，不再受 sandbox 清理规则约束）；`release.sh` 修正 `gh release create` 缺 `--repo` 参数导致在非 git 目录下发布失败的问题；同步 SKILL.md 中的路径说明。
+
 ## v0.31.0-r1
 
 - **更新时间（本版本）**：2026-09-23
