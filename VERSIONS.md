@@ -7,6 +7,13 @@
 
 ---
 
+## v0.31.0-r4
+
+- **更新时间（本版本）**：2026-09-23
+- **Memos 项目更新时间**：无变化，仍为 v0.31.0（2026-09-20 00:50 (UTC+8) 发布）
+- **API 兼容版本**：Memos v0.31.0（基准 `proto/gen/openapi.yaml`，存档 `docs/openapi-v0.31.0.yaml`，无变化）
+- **介绍**：健壮性加固。CLI：`list` 参数改为 `strconv.Atoi` 严格校验（非正整数报错退出码 2）；`GetAllMemos` 拒绝非正 limit。HTTP 客户端不自动跟随重定向（防 token 泄漏），非 2xx 响应统一报错；`pageToken` 改用 `url.Values` 编码。`release.sh` 重写：版本号格式校验、VERSIONS.md 台账缺失即中止、默认 dry-run（仅 `--yes` 才实际发版）、重复发版检测、gh 缺失报错。
+
 ## v0.31.0-r3
 
 - **更新时间（本版本）**：2026-09-23
