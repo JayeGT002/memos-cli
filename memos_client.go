@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 )
@@ -26,8 +27,8 @@ type Status struct {
 
 // User 用户（openapi.yaml components.schemas.User）
 type User struct {
-	Name      string `json:"name"`      // users/{user}
-	Role      string `json:"role"`      // HOST | ADMIN | USER
+	Name      string `json:"name"` // users/{user}
+	Role      string `json:"role"` // HOST | ADMIN | USER
 	Email     string `json:"email"`
 	Nickname  string `json:"nickname"`
 	AvatarURL string `json:"avatarUrl"`
@@ -66,7 +67,12 @@ func NewClient(baseURL, accessToken string) *Client {
 	return &Client{
 		baseURL:     baseURL,
 		accessToken: accessToken,
-		httpClient:  &http.Client{Timeout: 30 * time.Second},
+		httpClient: &http.Client{
+			Timeout: 30 * time.Second,
+			CheckRedirect: func(_ *http.Request, _ []*http.Request) error {
+				return http.ErrUseLastResponse
+			},
+		},
 	}
 }
 
@@ -129,18 +135,23 @@ func (c *Client) doRequest(method, endpoint string, body interface{}) ([]byte, e
 		}
 		return nil, fmt.Errorf("HTTP %d: %s", resp.StatusCode, truncateStr(string(result), 200))
 	}
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return nil, fmt.Errorf("unexpected HTTP status %d", resp.StatusCode)
+	}
 
 	return result, nil
 }
 
 // ListMemos 获取memos列表（GET /memos，支持 pageSize/pageToken 分页）
 func (c *Client) ListMemos(pageSize int, pageToken string) (*MemoListResponse, error) {
-	url := fmt.Sprintf("/memos?pageSize=%d", pageSize)
+	query := url.Values{}
+	query.Set("pageSize", fmt.Sprintf("%d", pageSize))
 	if pageToken != "" {
-		url += "&pageToken=" + pageToken
+		query.Set("pageToken", pageToken)
 	}
+	endpoint := "/memos?" + query.Encode()
 
-	data, err := c.doRequest("GET", url, nil)
+	data, err := c.doRequest("GET", endpoint, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -154,6 +165,9 @@ func (c *Client) ListMemos(pageSize int, pageToken string) (*MemoListResponse, e
 
 // GetAllMemos 获取所有memos（分页遍历）
 func (c *Client) GetAllMemos(limit int) ([]Memo, error) {
+	if limit <= 0 {
+		return nil, fmt.Errorf("limit must be a positive integer")
+	}
 	var allMemos []Memo
 	pageToken := ""
 

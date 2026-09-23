@@ -1,29 +1,55 @@
 #!/bin/sh
-# release.sh — memos-cli 版本发布：同步 → 校验 → 提交 → 打 tag → GitHub Release
-# 用法: cd skills/memos-api && ./release.sh <version> [--dry-run] [--yes] [--skip-smoke]
-#   例: ./release.sh v0.31.0-r1 --dry-run   # 预览，不产生任何外部动作（默认行为）
-#        ./release.sh v0.31.0-r1 --yes        # 真发布：push + gh release
-# 前置: 1) VERSIONS.md 已写好 <version> 条目  2) 冒烟通过（正式发布默认强制跑 quickstart）
-# 发布源目录: projects/memos-cli/（2026-09-23 由 sandbox/memos-cli-publish 迁入；git → github.com/JayeGT002/memos-cli）
-# 失败处置: push 前失败 → 本地无副作用，修复重跑；push 后失败 → 用 gh release create 补发，git 历史不回滚
-set -u
+# release.sh — 同步、校验并发布 memos-cli
+# 用法: ./scripts/release.sh vX.Y.Z-rN [--dry-run] [--yes] [--skip-smoke]
+# 默认只预览；只有显式传入 --yes 才提交、打 tag、推送并创建 GitHub Release。
+set -eu
 
-SKILL_DIR=$(cd "$(dirname "$0")" && pwd)
-PUB_DIR="$SKILL_DIR/../../projects/memos-cli"
+SCRIPT_DIR=$(CDPATH= cd "$(dirname "$0")" && pwd)
+if [ -f "$SCRIPT_DIR/../go.mod" ]; then
+  SKILL_DIR=$(CDPATH= cd "$SCRIPT_DIR/.." && pwd)
+elif [ -f "$SCRIPT_DIR/go.mod" ]; then
+  SKILL_DIR=$SCRIPT_DIR
+else
+  echo "❌ 找不到 go.mod，无法定位源码目录。" >&2
+  exit 2
+fi
 
-VER="${1:-}"
-case "$VER" in ""|-*) echo "❌ 缺少版本号。用法: ./release.sh vX.Y.Z-rN [--dry-run] [--yes]"; exit 2;; esac
-echo "$VER" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+-r[0-9]+$' || { echo "❌ 版本号格式应为 vX.Y.Z-rN（例 v0.31.0-r2）"; exit 2; }
+if [ -n "${MEMOS_PUBLISH_DIR:-}" ]; then
+  PUB_DIR=$MEMOS_PUBLISH_DIR
+elif [ -e "$SKILL_DIR/.git" ]; then
+  PUB_DIR=$SKILL_DIR
+else
+  PUB_DIR=$(CDPATH= cd "$SKILL_DIR/../../projects/memos-cli" 2>/dev/null && pwd) || {
+    echo "❌ 找不到发布仓库；设置 MEMOS_PUBLISH_DIR 指定仓库路径。" >&2
+    exit 2
+  }
+fi
 
-DRY=1; YES=0; SMOKE=1
-for a in "$@"; do
-  [ "$a" = "--yes" ] && { DRY=0; YES=1; }
-  [ "$a" = "--dry-run" ] && DRY=1
-  [ "$a" = "--skip-smoke" ] && SMOKE=0
+VER=${1:-}
+case "$VER" in
+  ""|-*) echo "❌ 缺少版本号。用法: ./scripts/release.sh vX.Y.Z-rN [--dry-run] [--yes] [--skip-smoke]"; exit 2 ;;
+esac
+echo "$VER" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+-r[0-9]+$' || {
+  echo "❌ 版本号格式应为 vX.Y.Z-rN（例 v0.31.0-r2）" >&2
+  exit 2
+}
+
+YES=0
+SMOKE=1
+for arg in "$@"; do
+  case "$arg" in
+    --yes) YES=1 ;;
+    --dry-run) YES=0 ;;
+    --skip-smoke) SMOKE=0 ;;
+  esac
 done
 
-# 1. 校验版本台账条目存在，并提取作为 release notes
-grep -q "^## $VER\$" "$SKILL_DIR/VERSIONS.md" || { echo "❌ VERSIONS.md 缺少 '## $VER' 条目，先写台账再发版。"; exit 2; }
+VERSIONS="$SKILL_DIR/VERSIONS.md"
+[ -f "$VERSIONS" ] || { echo "❌ 找不到版本台账: $VERSIONS" >&2; exit 2; }
+grep -q "^## $VER\$" "$VERSIONS" || {
+  echo "❌ VERSIONS.md 缺少 '## $VER' 条目，先写台账再发版。" >&2
+  exit 2
+}
 NOTES=$(awk -v v="## $VER" '
   $0==v{f=1;next}
   f && /^#/{exit}
@@ -32,77 +58,76 @@ NOTES=$(awk -v v="## $VER" '
     s=1; while(s<=n && lines[s] ~ /^[[:space:]]*$/) s++;
     e=n; while(e>=s && (lines[e] ~ /^[[:space:]]*$/ || lines[e] ~ /^-[ -]*$/)) e--;
     for(i=s;i<=e;i++) print lines[i]
-  }' "$SKILL_DIR/VERSIONS.md")
-[ -d "$PUB_DIR/.git" ] || { echo "❌ 发布仓库不存在: $PUB_DIR"; exit 2; }
+  }' "$VERSIONS")
+[ -d "$PUB_DIR/.git" ] || { echo "❌ 发布仓库不存在: $PUB_DIR" >&2; exit 2; }
 
-# 幂等保护：远端已发过该版本 → 直接拒绝；本地 tag 是上次 dry-run 留下的 → 复用
-if [ "$DRY" = 0 ]; then
-  GH_BIN=$(command -v gh || echo /root/.local/bin/gh)
-  "$GH_BIN" release view "$VER" --repo JayeGT002/memos-cli >/dev/null 2>&1 \
-    && { echo "❌ $VER 已在 GitHub 发布过，勿重复发版（升修订号 -rN）"; exit 2; }
-fi
-
-# 2. 冒烟（正式发布强制，除非 --skip-smoke）
-if [ "$SMOKE" = 1 ] && [ "$DRY" = 0 ]; then
-  echo "1/4 冒烟测试..."
-  (cd "$SKILL_DIR" && ./quickstart.sh) || { echo "❌ 冒烟失败，已中止发版。"; exit 1; }
-else
-  echo "1/4 冒烟: 跳过（dry-run 或 --skip-smoke）"
-fi
-
-# 3. 同步 skill 源码 → 发布仓库（不带 --delete，保留仓库自有 README/LICENSE/.gitignore/.git）
-#    目标结构：源码与台账在根目录，SKILL.md → skill/，维护脚本 → scripts/，spec 存档 → docs/
-echo "2/4 同步源码 → $PUB_DIR"
-SYNC_FAILED=""
-mkdir -p "$PUB_DIR/skill" "$PUB_DIR/scripts" "$PUB_DIR/docs"
-for f in main.go memos_client.go go.mod VERSIONS.md; do
-  cp "$SKILL_DIR/$f" "$PUB_DIR/$f" 2>/dev/null || SYNC_FAILED="$SYNC_FAILED $f"
-done
-cp "$SKILL_DIR/SKILL.md" "$PUB_DIR/skill/SKILL.md" 2>/dev/null || SYNC_FAILED="$SYNC_FAILED SKILL.md"
-for f in quickstart.sh update-check.sh release.sh; do
-  cp "$SKILL_DIR/$f" "$PUB_DIR/scripts/$f" 2>/dev/null || SYNC_FAILED="$SYNC_FAILED $f"
-done
-SPEC=$(ls "$SKILL_DIR"/openapi-v*.yaml 2>/dev/null | tail -1)
-[ -n "$SPEC" ] && cp "$SPEC" "$PUB_DIR/docs/"
-[ -n "$SYNC_FAILED" ] && { echo "❌ 同步失败:$SYNC_FAILED"; exit 1; }
-git -C "$PUB_DIR" status --porcelain | sed 's/^/   /'
-
-# 4. 提交 + tag（本地动作，dry-run 到此为止只预览）
-echo "3/4 生成提交与 tag..."
-if ! git -C "$PUB_DIR" diff --quiet || [ -n "$(git -C "$PUB_DIR" status --porcelain)" ]; then
-  git -C "$PUB_DIR" add -A
-  git -C "$PUB_DIR" commit -q -m "release: $VER" || { echo "❌ commit 失败"; exit 1; }
-  echo "   已提交: release: $VER"
-else
-  echo "   无源码变更（可能只发文档版）"
-fi
-if git -C "$PUB_DIR" rev-parse --verify "$VER" >/dev/null 2>&1; then
-  echo "   tag $VER 已存在（上次 dry-run 创建），复用"
-else
-  git -C "$PUB_DIR" tag -a "$VER" -m "$NOTES" || { echo "❌ tag 失败"; exit 1; }
-  echo "   已打 tag: $VER"
-fi
-
-if [ "$DRY" = 1 ]; then
-  echo ""
-  echo "======== DRY-RUN 预览（未推送）========"
+if [ "$YES" = 0 ]; then
+  echo "======== DRY-RUN 预览（没有文件或 Git 状态变更）========"
+  echo "版本: $VER"
+  echo "源码: $SKILL_DIR"
+  echo "发布仓库: $PUB_DIR"
   echo "Release notes:"
-  echo "$NOTES" | sed 's/^/  /'
-  echo "----------------------------------------"
-  echo "将要执行（确认无误后去掉 --dry-run 加 --yes）:"
-  echo "  git -C $PUB_DIR push origin main"
-  echo "  git -C $PUB_DIR push origin $VER"
-  echo "  gh release create $VER --title $VER --notes-file -"
-  echo "⚠️  注意: tag 已在本地创建；若要放弃本次发版: git -C $PUB_DIR tag -d $VER"
+  printf '%s\n' "$NOTES" | sed 's/^/  /'
+  echo "将执行：同步源码、运行冒烟测试、提交 release: ${VER}、创建 tag ${VER}、推送 main 和 tag、创建 GitHub Release。"
+  echo "确认后使用 --yes 执行发布。"
   exit 0
 fi
 
-# 5. 对外发布（仅 --yes 到达此处）
-echo "4/4 推送 GitHub + 创建 Release..."
-git -C "$PUB_DIR" push origin main || { echo "❌ push main 失败 → 修复后重跑（tag 未推，无外部残留）"; exit 1; }
-git -C "$PUB_DIR" push origin "$VER" || { echo "❌ push tag 失败 → 重跑: git -C $PUB_DIR push origin $VER"; exit 1; }
-GH_BIN=$(command -v gh || echo /root/.local/bin/gh)
-printf '%s\n' "$NOTES" | "$GH_BIN" release create "$VER" --repo JayeGT002/memos-cli --title "$VER" --notes-file - \
-  || { echo "❌ gh release create 失败 → 补发: printf '%s' '<notes>' | $GH_BIN release create $VER --repo JayeGT002/memos-cli --title $VER --notes-file -"; exit 1; }
+GH_BIN=$(command -v gh || true)
+[ -n "$GH_BIN" ] || { echo "❌ 找不到 gh。" >&2; exit 2; }
+if "$GH_BIN" release view "$VER" --repo JayeGT002/memos-cli >/dev/null 2>&1; then
+  echo "❌ ${VER} 已在 GitHub 发布过，勿重复发版（升修订号 -rN）" >&2
+  exit 2
+fi
 
-echo "✅ 发版完成: $VER（main + tag + GitHub Release）"
+if [ "$SMOKE" = 1 ]; then
+  echo "1/4 冒烟测试..."
+  (cd "$SKILL_DIR" && sh ./scripts/quickstart.sh) || {
+    echo "❌ 冒烟失败，已中止发版。" >&2
+    exit 1
+  }
+else
+  echo "1/4 冒烟测试: 按 --skip-smoke 跳过"
+fi
+
+echo "2/4 同步源码 → $PUB_DIR"
+mkdir -p "$PUB_DIR/skill" "$PUB_DIR/scripts" "$PUB_DIR/docs"
+copy_file() {
+  src=$1
+  dst=$2
+  if [ "$src" != "$dst" ]; then cp "$src" "$dst"; fi
+}
+for file in main.go memos_client.go go.mod VERSIONS.md; do
+  copy_file "$SKILL_DIR/$file" "$PUB_DIR/$file"
+done
+if [ -f "$SKILL_DIR/skill/SKILL.md" ]; then
+  copy_file "$SKILL_DIR/skill/SKILL.md" "$PUB_DIR/skill/SKILL.md"
+elif [ -f "$SKILL_DIR/SKILL.md" ]; then
+  copy_file "$SKILL_DIR/SKILL.md" "$PUB_DIR/skill/SKILL.md"
+fi
+for file in quickstart.sh update-check.sh release.sh; do
+  if [ -f "$SKILL_DIR/scripts/$file" ]; then
+    copy_file "$SKILL_DIR/scripts/$file" "$PUB_DIR/scripts/$file"
+  elif [ -f "$SKILL_DIR/$file" ]; then
+    copy_file "$SKILL_DIR/$file" "$PUB_DIR/scripts/$file"
+  fi
+done
+for spec in "$SKILL_DIR"/openapi-v*.yaml "$SKILL_DIR"/docs/openapi-v*.yaml; do
+  [ -f "$spec" ] || continue
+  copy_file "$spec" "$PUB_DIR/docs/$(basename "$spec")"
+done
+
+echo "3/4 生成提交与 tag..."
+if [ -n "$(git -C "$PUB_DIR" status --porcelain)" ]; then
+  git -C "$PUB_DIR" add -A
+  git -C "$PUB_DIR" commit -m "release: $VER"
+fi
+if ! git -C "$PUB_DIR" rev-parse --verify "refs/tags/$VER" >/dev/null 2>&1; then
+  git -C "$PUB_DIR" tag -a "$VER" -m "$NOTES"
+fi
+
+echo "4/4 推送 GitHub + 创建 Release..."
+git -C "$PUB_DIR" push origin main
+git -C "$PUB_DIR" push origin "$VER"
+printf '%s\n' "$NOTES" | "$GH_BIN" release create "$VER" --repo JayeGT002/memos-cli --title "$VER" --notes-file -
+echo "✅ 发版完成: ${VER}（main + tag + GitHub Release）"

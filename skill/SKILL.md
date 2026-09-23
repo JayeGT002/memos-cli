@@ -111,18 +111,18 @@ cd skills/memos-api && go build -o memos-cli .
 memos 升级后的适配流程：
 
 ```bash
-cd skills/memos-api
-./update-check.sh          # 1. 查上游：最新 release vs 本地 spec 存档；有更新会下载新 spec 并出 diff（退出码 1）
+# 在仓库根目录运行
+sh scripts/update-check.sh # 1. 查上游：最新 release vs 本地 spec 存档；有更新会下载新 spec 并出 diff（退出码 1）
                            # 2. 按 sandbox/memos-api-check/api-diff.patch 改 memos_client.go / main.go
-./quickstart.sh            # 3. 六命令冒烟
+sh scripts/quickstart.sh   # 3. 六命令冒烟
 # 4. 归档：新 spec 存档改名 openapi-vX.Y.Z.yaml，更新 SKILL.md 基准版本行
 # 5. VERSIONS.md 加条目（memos 项目发布时间从 update-check.sh 输出里抄）
-./release.sh vX.Y.Z-rN --dry-run   # 6. 预览：同步源码 → 本地 commit + tag（不外发）
-./release.sh vX.Y.Z-rN --yes       # 7. 确认后正式发布：push + GitHub Release
+sh scripts/release.sh vX.Y.Z-rN   # 6. 只预览，不改文件或 Git 状态
+sh scripts/release.sh vX.Y.Z-rN --yes # 7. 确认后运行冒烟并正式发布：commit + tag + push + GitHub Release
 ```
 
-工具位置：`update-check.sh` / `release.sh` / `VERSIONS.md`（发布仓库 = `projects/memos-cli/`，2026-09-23 由 sandbox 迁入 → github.com/JayeGT002/memos-cli。仓库结构自 v0.31.0-r3 起：源码与台账在根目录、skill 文档在 `skill/`、维护脚本在 `scripts/`、spec 存档在 `docs/`）。
-失败处置：push 前失败无外部副作用，修复重跑（dry-run 的本地 commit/tag 会被复用）；`gh release create` 失败按脚本提示补发。
+工具位置：`scripts/update-check.sh` / `scripts/release.sh` / `VERSIONS.md`。仓库结构：源码与台账在根目录、skill 文档在 `skill/`、维护脚本在 `scripts/`、spec 存档在 `docs/`。如果源码目录与发布仓库分开，可通过 `MEMOS_PUBLISH_DIR` 指定发布仓库。
+失败处置：dry-run 不产生本地或远端副作用；正式发布在 push 前失败时修复后重跑，`gh release create` 失败时按脚本提示补发。
 
 ## Dependencies
 

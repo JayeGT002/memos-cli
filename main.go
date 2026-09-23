@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
 )
 
@@ -102,7 +103,12 @@ func testConnection(client *Client) {
 func listMemos(client *Client, args []string) {
 	limit := 10
 	if len(args) > 0 {
-		fmt.Sscanf(args[0], "%d", &limit)
+		parsed, err := strconv.Atoi(args[0])
+		if err != nil || parsed <= 0 {
+			fmt.Fprintln(os.Stderr, "数量必须是正整数")
+			os.Exit(2)
+		}
+		limit = parsed
 	}
 
 	memos, err := client.GetAllMemos(limit)
